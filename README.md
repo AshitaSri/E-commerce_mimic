@@ -5,6 +5,7 @@ A small e-commerce order pipeline built as separate Node.js microservices, conne
 - **What is this / how does it work?** → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - **How do I run it and try it out?** → [docs/RUNNING.md](docs/RUNNING.md)
 - **What does CI do here?** → [docs/CI.md](docs/CI.md)
+- **How is logging/monitoring set up?** → [docs/NEW_RELIC.md](docs/NEW_RELIC.md)
 
 ## Project structure
 
@@ -30,6 +31,7 @@ ecommerce_mimic/
 ```bash
 docker compose up -d   # Kafka + Redis + Postgres
 npm install
+cp .env.example .env    # then paste your New Relic license key in — see docs/NEW_RELIC.md
 npm run dev:all         # starts all 6 backend services AND the UI together
 ```
 

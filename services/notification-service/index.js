@@ -1,3 +1,6 @@
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
+require('newrelic');
+
 const express = require('express');
 const { randomUUID } = require('crypto');
 const { openDb, consume } = require('shared');
