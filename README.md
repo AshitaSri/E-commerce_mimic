@@ -4,11 +4,13 @@ A small e-commerce order pipeline built as separate Node.js microservices, conne
 
 - **What is this / how does it work?** → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - **How do I run it and try it out?** → [docs/RUNNING.md](docs/RUNNING.md)
+- **What does CI do here?** → [docs/CI.md](docs/CI.md)
 
 ## Project structure
 
 ```
 ecommerce_mimic/
+  .github/workflows/       # GitHub Actions CI — builds/checks every push (see docs/CI.md)
   docker-compose.yml       # Kafka, Redis, Postgres — the shared infrastructure
   docker/postgres-init/    # creates the 5 per-service Postgres databases on first boot
   shared/                  # Kafka + Postgres helper code, reused by every service
