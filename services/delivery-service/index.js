@@ -6,14 +6,7 @@ const SERVICE_NAME = 'delivery-service';
 
 const app = express();
 
-const db = openDb('delivery.db', `
-  CREATE TABLE IF NOT EXISTS deliveries (
-    id TEXT PRIMARY KEY,
-    order_id TEXT NOT NULL,
-    status TEXT NOT NULL,
-    created_at TEXT NOT NULL
-  );
-`);
+let db;
 
 // Delivery only fires once BOTH payment.authorized and inventory.reserved
 // have arrived for the same orderId. This in-memory map is the join state.
@@ -26,9 +19,10 @@ async function tryCreateDelivery(orderId) {
   const id = randomUUID();
   const createdAt = new Date().toISOString();
 
-  db.prepare(
-    'INSERT INTO deliveries (id, order_id, status, created_at) VALUES (?, ?, ?, ?)'
-  ).run(id, orderId, 'created', createdAt);
+  await db.query(
+    'INSERT INTO deliveries (id, order_id, status, created_at) VALUES ($1, $2, $3, $4)',
+    [id, orderId, 'created', createdAt]
+  );
 
   await publish('delivery.created', { deliveryId: id, orderId, createdAt });
 
@@ -56,6 +50,14 @@ async function handleEvent(topic, event) {
 const PORT = process.env.PORT || 3004;
 
 (async () => {
+  db = await openDb('delivery', `
+    CREATE TABLE IF NOT EXISTS deliveries (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+  `);
   await initProducer(SERVICE_NAME);
   await consume(
     SERVICE_NAME,

@@ -1,12 +1,11 @@
-const Database = require('better-sqlite3');
-const path = require('path');
+const { Pool } = require('pg');
 
-function openDb(filename, schemaSql) {
-  const dbPath = path.join(process.cwd(), filename);
-  const db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  if (schemaSql) db.exec(schemaSql);
-  return db;
+async function openDb(databaseName, schemaSql) {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL || `postgres://app:app@localhost:5432/${databaseName}`,
+  });
+  if (schemaSql) await pool.query(schemaSql);
+  return pool;
 }
 
 module.exports = { openDb };

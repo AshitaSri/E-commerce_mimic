@@ -11,7 +11,7 @@ Client
 API Gateway  (:3000)
   │  forwards to Order Service
   ▼
-Order Service  (:3001) ───────► orders.db (SQLite)
+Order Service  (:3001) ───────► orders DB (Postgres)
   │                     └─────► Redis (order status cache)
   │
   │  publishes: order.created
@@ -22,7 +22,7 @@ Order Service  (:3001) ───────► orders.db (SQLite)
 Payment Service (:3002)      Inventory Service (:3003)
   │  charges mock card         │  reserves stock
   ▼                            ▼
-payments.db                inventory.db
+payments DB                inventory DB
   │                            │
   │ publishes:                 │ publishes:
   │ payment.authorized         │ inventory.reserved
@@ -38,7 +38,7 @@ payments.db                inventory.db
       same order before proceeding
                  │
                  ▼
-            delivery.db
+            delivery DB
                  │
                  │ publishes: delivery.created
                  ▼
@@ -48,7 +48,7 @@ payments.db                inventory.db
      Notification Service (:3005)
                  │
                  ▼
-           notification.db
+           notifications DB
 ```
 
 ## The services
@@ -56,13 +56,13 @@ payments.db                inventory.db
 | Service | Port | Owns | Listens for | Publishes |
 |---|---|---|---|---|
 | API Gateway | 3000 | — | HTTP from client | — (forwards to Order Service) |
-| Order Service | 3001 | `orders.db`, Redis | HTTP `POST /orders` | `order.created` |
-| Payment Service | 3002 | `payments.db` | `order.created` | `payment.authorized` / `payment.failed` |
-| Inventory Service | 3003 | `inventory.db` | `order.created` | `inventory.reserved` |
-| Delivery Service | 3004 | `delivery.db` | `payment.authorized`, `payment.failed`, `inventory.reserved` | `delivery.created` |
-| Notification Service | 3005 | `notification.db` | `delivery.created` | — |
+| Order Service | 3001 | `orders` DB, Redis | HTTP `POST /orders` | `order.created` |
+| Payment Service | 3002 | `payments` DB | `order.created` | `payment.authorized` / `payment.failed` |
+| Inventory Service | 3003 | `inventory` DB | `order.created` | `inventory.reserved` |
+| Delivery Service | 3004 | `delivery` DB | `payment.authorized`, `payment.failed`, `inventory.reserved` | `delivery.created` |
+| Notification Service | 3005 | `notifications` DB | `delivery.created` | — |
 
-Each service is a standalone Node/Express process with its own SQLite file — nothing shares a database. That isolation is deliberate: it mirrors how real microservices are usually built (each service owns its data), and it means an RCA engine investigating an incident has to trace *across* service boundaries, not just query one shared table.
+Each service is a standalone Node/Express process with its own Postgres **database** — nothing shares a database, though for local-dev convenience they all live inside one Postgres server/container. That isolation is deliberate: it mirrors how real microservices are usually built (each service owns its data), and it means an RCA engine investigating an incident has to trace *across* service boundaries, not just query one shared table.
 
 ## Why Kafka instead of direct HTTP calls between services
 
@@ -79,15 +79,18 @@ Every other service reacts to a single event. Delivery Service is different — 
 
 This is worth knowing about specifically because it's the most natural place to later inject a subtle bug — e.g. what happens if the service restarts mid-wait and loses that in-memory state, or if one of the two events is dropped.
 
-## Why SQLite instead of Postgres
+## Why Postgres (and why one container, not five)
 
-The original design diagram shows a separate Postgres instance per service. For this first build we're using SQLite files instead — same "one database per service" principle, but zero setup (no Docker, no connection pooling to configure). It's a drop-in placeholder: when we get to testing failure modes that specifically involve database behavior (connection pool exhaustion, locking — the kind of thing the RCA doc's worked example is about), we'll swap the relevant service(s) over to real Postgres, since SQLite doesn't have a connection pool to exhaust.
+The original design diagram shows a separate Postgres instance per service, which is exactly what we're running now — each service connects to its own database (`orders`, `payments`, `inventory`, `delivery`, `notifications`), with its own schema, and none of them can see each other's tables. For local development they all live inside **one Postgres container** rather than five separate containers — same data isolation, far less resource overhead. If this ever needs to look more like production, each database can be split into its own container by changing one line per service (the `DATABASE_URL`/connection string) — no application code changes needed.
+
+This is also what makes the RCA doc's worked example possible to reproduce later: that scenario is specifically about a Postgres connection pool exhausting under load, which only exists as a failure mode with a real Postgres server — SQLite has no connection pool to exhaust.
 
 ## Infrastructure
 
-Only two things run in Docker — `docker-compose.yml` defines:
+Three things run in Docker — `docker-compose.yml` defines:
 
 - **Kafka** (`apache/kafka:3.7.0`, single broker, KRaft mode — no separate Zookeeper needed)
 - **Redis** (used by Order Service to cache order status)
+- **Postgres** (`postgres:16`, one server hosting all five service databases, created automatically on first boot via `docker/postgres-init/init-databases.sh`)
 
 Every Node service itself runs as a plain local process (`node index.js`), not in a container. That split — infra in Docker, application code local — keeps iteration fast (edit a service, it restarts instantly) while still giving us a real broker and cache to reason about.

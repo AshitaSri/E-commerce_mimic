@@ -1,18 +1,18 @@
 # Running & testing this project
 
-## 1. Start infrastructure (Kafka + Redis)
+## 1. Start infrastructure (Kafka + Redis + Postgres)
 
 ```bash
 docker compose up -d
 ```
 
-Check both containers are actually up:
+Check all three containers are actually up:
 
 ```bash
 docker compose ps
 ```
 
-You should see `kafka` and `redis` both `Up`.
+You should see `kafka`, `redis`, and `postgres` all `Up`. Postgres automatically creates the 5 per-service databases (`orders`, `payments`, `inventory`, `delivery`, `notifications`) the first time its container starts, using `docker/postgres-init/init-databases.sh` — nothing to run manually there.
 
 **First time only** — Kafka needs its topics created before any service can subscribe to them:
 
@@ -24,7 +24,7 @@ for t in order.created payment.authorized payment.failed inventory.reserved deli
 done
 ```
 
-(If you ever wipe the Kafka container/volume — e.g. `docker compose down -v` — you'll need to re-run this.)
+(If you ever wipe the Kafka container/volume — e.g. `docker compose down -v` — you'll need to re-run this. Same goes for Postgres: `down -v` wipes the databases too, and they'll be recreated fresh on next `up -d`.)
 
 ## 2. Install dependencies
 
@@ -78,14 +78,14 @@ Fetch the order back through the gateway:
 curl http://localhost:3000/orders/<order-id>
 ```
 
-Or look directly at what each service persisted — every service has its own SQLite file:
+Or look directly at what each service persisted — every service has its own Postgres database:
 
 ```bash
-sqlite3 services/order-service/orders.db "SELECT * FROM orders;"
-sqlite3 services/payment-service/payments.db "SELECT * FROM payments;"
-sqlite3 services/inventory-service/inventory.db "SELECT * FROM reservations;"
-sqlite3 services/delivery-service/delivery.db "SELECT * FROM deliveries;"
-sqlite3 services/notification-service/notification.db "SELECT * FROM notifications;"
+docker exec ecommerce_mimic-postgres-1 psql -U app -d orders -c "SELECT * FROM orders;"
+docker exec ecommerce_mimic-postgres-1 psql -U app -d payments -c "SELECT * FROM payments;"
+docker exec ecommerce_mimic-postgres-1 psql -U app -d inventory -c "SELECT * FROM reservations;"
+docker exec ecommerce_mimic-postgres-1 psql -U app -d delivery -c "SELECT * FROM deliveries;"
+docker exec ecommerce_mimic-postgres-1 psql -U app -d notifications -c "SELECT * FROM notifications;"
 ```
 
 All five rows should share the same `order_id` — that's the trail an RCA engine would later walk backwards through.
@@ -100,9 +100,9 @@ docker exec ecommerce_mimic-redis-1 redis-cli GET "order:<order-id>:status"
 
 Payment Service randomly declines about 10% of charges (`mockChargeCard` in `services/payment-service/index.js`) to simulate a real payment gateway. When that happens:
 
-- `payments.db` gets a row with `status = 'failed'`
+- `payments` DB gets a row with `status = 'failed'`
 - Payment Service publishes `payment.failed` instead of `payment.authorized`
-- Delivery Service sees `payment.failed` and **does not** create a delivery — you'll see `payment failed, skipping delivery` in the logs, and no row appears in `delivery.db` or `notification.db` for that order
+- Delivery Service sees `payment.failed` and **does not** create a delivery — you'll see `payment failed, skipping delivery` in the logs, and no row appears in the `delivery` or `notifications` databases for that order
 
 Since it's random, just place a handful of orders in a row and watch for one to decline:
 
@@ -122,8 +122,8 @@ Stop the services: `Ctrl+C` in the `npm run dev` terminal.
 Stop the infrastructure:
 
 ```bash
-docker compose down          # stops Kafka + Redis, keeps their data
-docker compose down -v       # also wipes Kafka/Redis data — you'll need to recreate topics (step 1) next time
+docker compose down          # stops Kafka + Redis + Postgres, keeps their data
+docker compose down -v       # also wipes all data — you'll need to recreate Kafka topics (step 1) next time; Postgres databases recreate themselves automatically
 ```
 
 ## Troubleshooting
@@ -133,4 +133,6 @@ docker compose down -v       # also wipes Kafka/Redis data — you'll need to re
 | A service crashes immediately with `UNKNOWN_TOPIC_OR_PARTITION` | Kafka topics weren't created yet — run the topic-creation loop in step 1. |
 | Services print repeated `group coordinator is not available` and never recover | Kafka's internal offsets topic needs `replication factor 1` for a single-broker setup — already configured in `docker-compose.yml`; if you edited that file, make sure those three `KAFKA_*REPLICATION_FACTOR*` lines are still there. |
 | `docker compose up -d` fails with "Cannot connect to the Docker daemon" | Docker Desktop isn't running — open it, wait for the whale icon to settle, then retry. |
+| A service errors with `ECONNREFUSED` on port 5432 | Postgres isn't up yet or the container isn't running — check `docker compose ps`. |
+| Containers show `Exited` after your Mac slept or Docker restarted | They don't auto-restart by default — just run `docker compose up -d` again; your data is preserved. |
 | An order never reaches Delivery/Notification | Check if it was one of the ~10% declined payments (step 6) — that's expected behavior, not a bug. |

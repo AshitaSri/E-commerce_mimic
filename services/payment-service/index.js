@@ -6,15 +6,7 @@ const SERVICE_NAME = 'payment-service';
 
 const app = express();
 
-const db = openDb('payments.db', `
-  CREATE TABLE IF NOT EXISTS payments (
-    id TEXT PRIMARY KEY,
-    order_id TEXT NOT NULL,
-    amount REAL NOT NULL,
-    status TEXT NOT NULL,
-    created_at TEXT NOT NULL
-  );
-`);
+let db;
 
 // stand-in for a real payment gateway: ~10% of charges are declined
 function mockChargeCard(amount) {
@@ -29,9 +21,10 @@ async function handleOrderCreated(topic, event) {
   const status = approved ? 'authorized' : 'failed';
   const createdAt = new Date().toISOString();
 
-  db.prepare(
-    'INSERT INTO payments (id, order_id, amount, status, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(id, orderId, total, status, createdAt);
+  await db.query(
+    'INSERT INTO payments (id, order_id, amount, status, created_at) VALUES ($1, $2, $3, $4, $5)',
+    [id, orderId, total, status, createdAt]
+  );
 
   await publish(approved ? 'payment.authorized' : 'payment.failed', {
     paymentId: id,
@@ -47,6 +40,15 @@ async function handleOrderCreated(topic, event) {
 const PORT = process.env.PORT || 3002;
 
 (async () => {
+  db = await openDb('payments', `
+    CREATE TABLE IF NOT EXISTS payments (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+  `);
   await initProducer(SERVICE_NAME);
   await consume(SERVICE_NAME, ['order.created'], 'payment-service-group', handleOrderCreated);
   app.listen(PORT, () => console.log(`[payment-service] listening on ${PORT}`));

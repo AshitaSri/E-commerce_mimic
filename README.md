@@ -1,6 +1,6 @@
 # ecommerce-mimic
 
-A small e-commerce order pipeline built as separate Node.js microservices, connected by Kafka events, each with its own SQLite database. It exists to give the [RCA (root cause analysis) engine](#why-this-exists) something real to diagnose — a system with actual services, actual databases, and an actual message broker, so we can later inject realistic failures and test whether the RCA engine can find them.
+A small e-commerce order pipeline built as separate Node.js microservices, connected by Kafka events, each with its own Postgres database. It exists to give the [RCA (root cause analysis) engine](#why-this-exists) something real to diagnose — a system with actual services, actual databases, and an actual message broker, so we can later inject realistic failures and test whether the RCA engine can find them.
 
 - **What is this / how does it work?** → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - **How do I run it and try it out?** → [docs/RUNNING.md](docs/RUNNING.md)
@@ -8,7 +8,7 @@ A small e-commerce order pipeline built as separate Node.js microservices, conne
 ## Quick start
 
 ```bash
-docker compose up -d   # Kafka + Redis
+docker compose up -d   # Kafka + Redis + Postgres
 npm install
 npm run dev             # starts all 6 services
 ```
