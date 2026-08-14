@@ -5,8 +5,9 @@
 A client places an order. That single request triggers a chain reaction across five independent services, coordinated entirely through Kafka events — no service calls another service directly except the API Gateway calling Order Service.
 
 ```
-Client
+Browser (React UI, :5173)
   │  POST /orders
+  │  GET /orders/:id/status  (polled)
   ▼
 API Gateway  (:3000)
   │  forwards to Order Service
@@ -55,7 +56,8 @@ payments DB                inventory DB
 
 | Service | Port | Owns | Listens for | Publishes |
 |---|---|---|---|---|
-| API Gateway | 3000 | — | HTTP from client | — (forwards to Order Service) |
+| Frontend (React) | 5173 | — | — | — (calls API Gateway over HTTP) |
+| API Gateway | 3000 | — | HTTP from client | — (forwards to / aggregates the other services) |
 | Order Service | 3001 | `orders` DB, Redis | HTTP `POST /orders` | `order.created` |
 | Payment Service | 3002 | `payments` DB | `order.created` | `payment.authorized` / `payment.failed` |
 | Inventory Service | 3003 | `inventory` DB | `order.created` | `inventory.reserved` |
@@ -78,6 +80,18 @@ This buys two things relevant to what we're building next:
 Every other service reacts to a single event. Delivery Service is different — it has to wait for *two* independent events (`payment.authorized` and `inventory.reserved`) for the *same order* before it's allowed to create a delivery. It tracks this with a small in-memory map keyed by `orderId`, and only proceeds once both flags are set (see `services/delivery-service/index.js`).
 
 This is worth knowing about specifically because it's the most natural place to later inject a subtle bug — e.g. what happens if the service restarts mid-wait and loses that in-memory state, or if one of the two events is dropped.
+
+## The frontend, and how it sees the whole pipeline
+
+`frontend/` is a small React (Vite) app — a form to place an order, and a checklist that shows the order moving through each stage in near-real-time. It's a client of the API Gateway only; it never talks to Kafka, Postgres, or any individual service directly, same as any other HTTP client would.
+
+The tricky part is that no single service knows an order's *full* status — Order Service only knows it created the order, Payment Service only knows what it did with payment, and so on. So the API Gateway exposes one extra endpoint just for the UI:
+
+```
+GET /orders/:id/status
+```
+
+This calls all five services in parallel (`GET /orders/:id`, `GET /payments/order/:id`, `GET /inventory/order/:id`, `GET /deliveries/order/:id`, `GET /notifications/order/:id`) and returns one combined JSON object. The frontend polls this endpoint every ~1.2 seconds after placing an order, and stops once the order reaches a final state (notified, or payment failed). This aggregation logic lives only in the gateway — none of the other services know the UI exists.
 
 ## Why Postgres (and why one container, not five)
 

@@ -23,6 +23,15 @@ async function handleOrderCreated(topic, event) {
   console.log(`[inventory-service] order ${orderId} inventory reserved`);
 }
 
+app.get('/inventory/order/:orderId', async (req, res) => {
+  const { rows } = await db.query(
+    'SELECT * FROM reservations WHERE order_id = $1 ORDER BY created_at DESC LIMIT 1',
+    [req.params.orderId]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'not found' });
+  res.json(rows[0]);
+});
+
 const PORT = process.env.PORT || 3003;
 
 (async () => {

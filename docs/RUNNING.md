@@ -32,19 +32,25 @@ done
 npm install
 ```
 
-This installs everything for all six services in one go (npm workspaces).
+This installs everything for all six backend services *and* the frontend in one go (npm workspaces).
 
-## 3. Start all services
+## 3. Start everything
 
 ```bash
-npm run dev
+npm run dev:all
 ```
 
-This runs all six services together in one terminal, each line prefixed with its service name (`[gateway]`, `[order]`, `[payment]`, `[inventory]`, `[delivery]`, `[notification]`) so you can watch the whole pipeline react in real time. Leave this running — open a second terminal for the next steps.
+This runs all six backend services **and** the React UI together in one terminal, each line prefixed with its name (`[gateway]`, `[order]`, `[payment]`, `[inventory]`, `[delivery]`, `[notification]`, `[ui]`) so you can watch the whole pipeline react in real time. Leave this running — open a second terminal for the next steps.
+
+(If you only want the backend without the UI, use `npm run dev` instead. To run just the UI on its own, `npm run dev:ui`.)
 
 Give it ~10-15 seconds on first boot — Kafka's internal coordinator takes a moment to become available, and you may briefly see "group coordinator is not available" errors in the logs. That's expected and resolves itself; the services retry automatically.
 
 ## 4. Place an order
+
+**Option A — the UI:** open **http://localhost:5173**, fill in the form, click "Place order." A checklist appears below showing the order move through Payment → Inventory → Delivery → Notification live, updating roughly every second.
+
+**Option B — curl:**
 
 ```bash
 curl -X POST http://localhost:3000/orders \
@@ -58,7 +64,7 @@ Response:
 {"id":"<order-id>","status":"created"}
 ```
 
-Watch the `npm run dev` terminal — within a second or two you should see all five services react in order:
+Either way, watch the `npm run dev:all` terminal — within a second or two you should see all five backend services react in order:
 
 ```
 [order] order <id> created, published order.created
@@ -96,6 +102,12 @@ You can also check the Redis cache Order Service wrote:
 docker exec ecommerce_mimic-redis-1 redis-cli GET "order:<order-id>:status"
 ```
 
+Or fetch the same combined view the UI polls, straight from the gateway:
+
+```bash
+curl http://localhost:3000/orders/<order-id>/status
+```
+
 ## 6. Testing the "unhappy path"
 
 Payment Service randomly declines about 10% of charges (`mockChargeCard` in `services/payment-service/index.js`) to simulate a real payment gateway. When that happens:
@@ -117,7 +129,7 @@ done
 
 ## 7. Stopping everything
 
-Stop the services: `Ctrl+C` in the `npm run dev` terminal.
+Stop the services: `Ctrl+C` in the `npm run dev:all` terminal.
 
 Stop the infrastructure:
 
@@ -136,3 +148,6 @@ docker compose down -v       # also wipes all data — you'll need to recreate K
 | A service errors with `ECONNREFUSED` on port 5432 | Postgres isn't up yet or the container isn't running — check `docker compose ps`. |
 | Containers show `Exited` after your Mac slept or Docker restarted | They don't auto-restart by default — just run `docker compose up -d` again; your data is preserved. |
 | An order never reaches Delivery/Notification | Check if it was one of the ~10% declined payments (step 6) — that's expected behavior, not a bug. |
+| The UI at localhost:5173 shows a blank page or fails to load | Check the `[ui]` lines in the terminal for a Vite error; make sure `npm install` finished successfully. |
+| The UI's order form submits but nothing updates, and the browser console shows a CORS error | The API Gateway needs to be running (it's the one with `cors` enabled) — check the `[gateway]` line shows `listening on 3000`. |
+| Port 5173 already in use | Another Vite dev server (from a previous run) is still up — same fix as the ports-in-use issue below: find and stop it, or just restart `npm run dev:all`. |

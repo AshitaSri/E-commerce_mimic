@@ -37,6 +37,15 @@ async function handleOrderCreated(topic, event) {
   console.log(`[payment-service] order ${orderId} payment ${status}`);
 }
 
+app.get('/payments/order/:orderId', async (req, res) => {
+  const { rows } = await db.query(
+    'SELECT * FROM payments WHERE order_id = $1 ORDER BY created_at DESC LIMIT 1',
+    [req.params.orderId]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'not found' });
+  res.json(rows[0]);
+});
+
 const PORT = process.env.PORT || 3002;
 
 (async () => {

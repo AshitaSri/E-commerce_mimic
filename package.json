@@ -3,10 +3,13 @@
   "private": true,
   "workspaces": [
     "shared",
-    "services/*"
+    "services/*",
+    "frontend"
   ],
   "scripts": {
-    "dev": "concurrently -n gateway,order,payment,inventory,delivery,notification -c blue,green,yellow,magenta,cyan,red \"npm run start -w api-gateway\" \"npm run start -w order-service\" \"npm run start -w payment-service\" \"npm run start -w inventory-service\" \"npm run start -w delivery-service\" \"npm run start -w notification-service\""
+    "dev": "concurrently -n gateway,order,payment,inventory,delivery,notification -c blue,green,yellow,magenta,cyan,red \"npm run start -w api-gateway\" \"npm run start -w order-service\" \"npm run start -w payment-service\" \"npm run start -w inventory-service\" \"npm run start -w delivery-service\" \"npm run start -w notification-service\"",
+    "dev:ui": "npm run dev -w frontend",
+    "dev:all": "concurrently -n gateway,order,payment,inventory,delivery,notification,ui -c blue,green,yellow,magenta,cyan,red,white \"npm run start -w api-gateway\" \"npm run start -w order-service\" \"npm run start -w payment-service\" \"npm run start -w inventory-service\" \"npm run start -w delivery-service\" \"npm run start -w notification-service\" \"npm run dev -w frontend\""
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
