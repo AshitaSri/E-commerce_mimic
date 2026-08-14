@@ -4,6 +4,7 @@
   "main": "index.js",
   "dependencies": {
     "kafkajs": "^2.2.4",
+    "newrelic": "^12.9.0",
     "pg": "^8.12.0"
   }
 }

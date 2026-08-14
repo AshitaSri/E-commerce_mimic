@@ -1,3 +1,4 @@
+const newrelic = require('newrelic');
 const { Kafka, logLevel } = require('kafkajs');
 
 function createClient(serviceName) {
@@ -37,7 +38,19 @@ async function consume(serviceName, topics, groupId, handler) {
   await consumer.run({
     eachMessage: async ({ topic, message }) => {
       const payload = JSON.parse(message.value.toString());
-      await handler(topic, payload);
+      // Kafka message handling isn't an HTTP request, so New Relic won't
+      // track it automatically — wrap it in a background transaction so
+      // this service shows up with real throughput/error data too.
+      await newrelic.startBackgroundTransaction(`Kafka/${topic}`, 'Kafka', async () => {
+        try {
+          await handler(topic, payload);
+        } catch (err) {
+          newrelic.noticeError(err);
+          throw err;
+        } finally {
+          newrelic.endTransaction();
+        }
+      });
     },
   });
   return consumer;

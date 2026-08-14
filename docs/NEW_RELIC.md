@@ -24,6 +24,16 @@ Every backend service (API Gateway + all 5 services) has the New Relic Node.js a
 
 The agent fails to start and logs a clear error to the console — but **the service itself keeps running normally**. A New Relic problem never takes down the app; it just means that service temporarily isn't reporting data.
 
+## Why only 2 of the 6 services show throughput by default
+
+New Relic automatically tracks **HTTP requests** as transactions. Only `api-gateway` and `order-service` handle direct HTTP requests, so out of the box they're the only two with visible response time/throughput data — `payment-service`, `inventory-service`, `delivery-service`, and `notification-service` only react to Kafka messages, which the agent doesn't track automatically.
+
+To fix that, `shared/kafka.js`'s `consume()` wraps every Kafka message handler in `newrelic.startBackgroundTransaction(...)` (see the function for details). This makes each Kafka-triggered action — `Kafka/order.created`, `Kafka/payment.authorized`, etc. — show up as its own transaction, so all 6 services report real throughput and error data, not just the two that speak HTTP.
+
 ## Verifying it's working
 
-Once `.env` has a real key, start everything (`npm run dev:all`) and place an order. Within a minute or two, you should see the 6 service names appear under **APM & Services** in your New Relic dashboard, each with real request data from the orders you placed.
+Once `.env` has a real key, start everything (`npm run dev:all`) and place an order. Within a minute or two:
+
+- **APM & Services** in New Relic should show all 6 service names with non-empty response time/throughput/error rate
+- Note: your New Relic account may have other, unrelated entities listed too (from other projects/tests) — ours are exactly these 6 names, nothing more
+- Clicking into any service (e.g. `payment-service`) → **Transactions** should show entries like `Kafka/order.created`, confirming the background-transaction wrapping is working
