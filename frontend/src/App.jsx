@@ -2,8 +2,7 @@ import { useState } from 'react';
 import ProductGrid from './components/ProductGrid.jsx';
 import Checkout from './components/Checkout.jsx';
 import OrderStatus from './components/OrderStatus.jsx';
-
-const GATEWAY_URL = 'http://localhost:3000';
+import { GATEWAY_URL } from './config.js';
 
 export default function App() {
   const [view, setView] = useState('catalog'); // catalog | checkout | status

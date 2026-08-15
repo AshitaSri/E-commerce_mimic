@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { GATEWAY_URL } from '../config.js';
 
-const GATEWAY_URL = 'http://localhost:3000';
 const POLL_INTERVAL_MS = 1200;
 const MAX_POLL_ATTEMPTS = 20;
 

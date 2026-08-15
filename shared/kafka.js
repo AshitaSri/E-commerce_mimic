@@ -2,12 +2,29 @@ const newrelic = require('newrelic');
 const { Kafka, logLevel } = require('kafkajs');
 
 function createClient(serviceName) {
-  return new Kafka({
+  const brokers = (process.env.KAFKA_BROKER || 'localhost:9092')
+    .split(',')
+    .map((broker) => broker.trim());
+
+  const config = {
     clientId: serviceName,
-    brokers: [process.env.KAFKA_BROKER || 'localhost:9092'],
+    brokers,
     logLevel: logLevel.ERROR,
     retry: { retries: 8 },
-  });
+  };
+
+  // Hosted Kafka (e.g. Upstash) requires SASL/SSL auth; local Kafka has
+  // none, so this only activates when credentials are actually provided.
+  if (process.env.KAFKA_USERNAME && process.env.KAFKA_PASSWORD) {
+    config.ssl = true;
+    config.sasl = {
+      mechanism: process.env.KAFKA_SASL_MECHANISM || 'scram-sha-256',
+      username: process.env.KAFKA_USERNAME,
+      password: process.env.KAFKA_PASSWORD,
+    };
+  }
+
+  return new Kafka(config);
 }
 
 let producer;
